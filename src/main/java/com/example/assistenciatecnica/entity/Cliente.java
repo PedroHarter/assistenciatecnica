@@ -1,5 +1,6 @@
 package com.example.assistenciatecnica.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.List;
 @Table(name = "clientes")
 public class Cliente extends Pessoa {
 
+    @JsonIgnore
     @OneToMany(mappedBy = "cliente")
     private List<Chamado> chamados = new ArrayList<>();
 

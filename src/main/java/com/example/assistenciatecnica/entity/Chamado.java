@@ -36,7 +36,7 @@ public class Chamado {
     @ManyToOne(optional = false)
     @JoinColumn(name = "cliente_id")
     private Cliente cliente;
-    
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "tecnico_id")
     private Tecnico tecnico;

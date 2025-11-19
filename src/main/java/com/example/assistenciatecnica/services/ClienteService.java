@@ -2,6 +2,7 @@ package com.example.assistenciatecnica.services;
 
 import com.example.assistenciatecnica.dto.ClienteDTO;
 import com.example.assistenciatecnica.entity.Cliente;
+import com.example.assistenciatecnica.mappers.ClienteMapper;
 import com.example.assistenciatecnica.repositories.ClienteRepository;
 import com.example.assistenciatecnica.repositories.TecnicoRepository;
 import com.example.assistenciatecnica.exceptions.DatabaseException;
@@ -23,11 +24,14 @@ public class ClienteService {
     @Autowired
     private TecnicoRepository tecnicoRepository;
 
+    @Autowired
+    private ClienteMapper mapper;
+
     @Transactional(readOnly = true)
     public List<ClienteDTO> findAll() {
         return repository.findAll()
                 .stream()
-                .map(ClienteDTO::new)
+                .map(mapper::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -35,22 +39,17 @@ public class ClienteService {
     public ClienteDTO findById(Long id) {
         Cliente entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado"));
-        return new ClienteDTO(entity);
+        return mapper.toDto(entity);
     }
 
     @Transactional
     public ClienteDTO insert(ClienteDTO dto) {
-        if (repository.existsByCpf(dto.getCpf()) || tecnicoRepository.existsByCpf(dto.getCpf())) {
-            throw new DatabaseException("CPF já cadastrado");
-        }
-        if (repository.existsByEmail(dto.getEmail()) || tecnicoRepository.existsByEmail(dto.getEmail())) {
-            throw new DatabaseException("Email já cadastrado");
-        }
+        validarCpfEmail(dto);
 
-        Cliente entity = new Cliente();
-        copyDtoToEntity(dto, entity);
+        Cliente entity = mapper.toEntity(dto);
         entity = repository.save(entity);
-        return new ClienteDTO(entity);
+
+        return mapper.toDto(entity);
     }
 
     @Transactional
@@ -58,9 +57,10 @@ public class ClienteService {
         Cliente entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado"));
 
-        copyDtoToEntity(dto, entity);
+        mapper.updateEntityFromDto(dto, entity);
         entity = repository.save(entity);
-        return new ClienteDTO(entity);
+
+        return mapper.toDto(entity);
     }
 
     public void delete(Long id) {
@@ -74,15 +74,12 @@ public class ClienteService {
         }
     }
 
-    private void copyDtoToEntity(ClienteDTO dto, Cliente entity) {
-        entity.setNome(dto.getNome());
-        entity.setCpf(dto.getCpf());
-        entity.setEmail(dto.getEmail());
-        entity.setSenha(dto.getSenha());
-
-        if (dto.getPerfis() != null) {
-            entity.getPerfis().clear();
-            entity.getPerfis().addAll(dto.getPerfis());
+    private void validarCpfEmail(ClienteDTO dto) {
+        if (repository.existsByCpf(dto.getCpf()) || tecnicoRepository.existsByCpf(dto.getCpf())) {
+            throw new DatabaseException("CPF já cadastrado");
+        }
+        if (repository.existsByEmail(dto.getEmail()) || tecnicoRepository.existsByEmail(dto.getEmail())) {
+            throw new DatabaseException("Email já cadastrado");
         }
     }
 }

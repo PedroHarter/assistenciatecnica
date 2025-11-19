@@ -5,6 +5,8 @@ import com.example.assistenciatecnica.entity.Chamado;
 import com.example.assistenciatecnica.entity.Cliente;
 import com.example.assistenciatecnica.entity.Tecnico;
 import com.example.assistenciatecnica.enums.Status;
+import com.example.assistenciatecnica.exceptions.DatabaseException;
+import com.example.assistenciatecnica.mappers.ChamadoMapper;
 import com.example.assistenciatecnica.repositories.ChamadoRepository;
 import com.example.assistenciatecnica.repositories.ClienteRepository;
 import com.example.assistenciatecnica.repositories.TecnicoRepository;
@@ -13,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,11 +30,14 @@ public class ChamadoService {
     @Autowired
     private TecnicoRepository tecnicoRepository;
 
+    @Autowired
+    private ChamadoMapper mapper;
+
     @Transactional(readOnly = true)
     public List<ChamadoDTO> findAll() {
         return chamadoRepository.findAll()
                 .stream()
-                .map(ChamadoDTO::new)
+                .map(mapper::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -41,64 +45,61 @@ public class ChamadoService {
     public ChamadoDTO findById(Long id) {
         Chamado entity = chamadoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Chamado não encontrado"));
-        return new ChamadoDTO(entity);
+        return mapper.toDto(entity);
     }
 
     @Transactional
     public ChamadoDTO insert(ChamadoDTO dto) {
-        Chamado entity = new Chamado();
-        copyDtoToEntity(dto, entity, true);
+        Cliente cliente = buscarCliente(dto);
+        Tecnico tecnico = buscarTecnico(dto);
+
+        Chamado entity = mapper.toEntity(dto, cliente, tecnico);
         entity = chamadoRepository.save(entity);
-        return new ChamadoDTO(entity);
+
+        return mapper.toDto(entity);
     }
 
     @Transactional
     public ChamadoDTO update(Long id, ChamadoDTO dto) {
         Chamado entity = chamadoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Chamado não encontrado"));
-        copyDtoToEntity(dto, entity, false);
+
+        Cliente cliente = buscarCliente(dto);
+        Tecnico tecnico = buscarTecnico(dto);
+
+        mapper.updateEntityFromDto(dto, entity, cliente, tecnico);
         entity = chamadoRepository.save(entity);
-        return new ChamadoDTO(entity);
+
+        return mapper.toDto(entity);
     }
 
     @Transactional
     public void delete(Long id) {
         Chamado entity = chamadoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Chamado não encontrado"));
+
+        if (entity.getStatus() != Status.ENCERRADO) {
+            throw new DatabaseException("Não é possível excluir um chamado que não está encerrado. Status atual: " + entity.getStatus());
+        }
+
         chamadoRepository.delete(entity);
     }
 
-    private void copyDtoToEntity(ChamadoDTO dto, Chamado entity, boolean isInsert) {
-
-        // PRIORIDADE / STATUS / TEXTO
-        entity.setPrioridade(dto.getPrioridade());
-        entity.setStatus(dto.getStatus());
-        entity.setTitulo(dto.getTitulo());
-        entity.setObservacoes(dto.getObservacoes());
-
-        // DATA FECHAMENTO
-        if (dto.getDataFechamento() != null) {
-            entity.setDataFechamento(dto.getDataFechamento());
-        } else if (dto.getStatus() == Status.ENCERRADO && entity.getDataFechamento() == null) {
-            entity.setDataFechamento(LocalDateTime.now());
-        }
-
-        // CLIENTE
+    private Cliente buscarCliente(ChamadoDTO dto) {
         if (dto.getCliente() == null || dto.getCliente().getId() == null) {
             throw new ResourceNotFoundException("Cliente é obrigatório");
         }
         Long clienteId = dto.getCliente().getId();
-        Cliente cliente = clienteRepository.findById(clienteId)
+        return clienteRepository.findById(clienteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado: " + clienteId));
-        entity.setCliente(cliente);
+    }
 
-        // TÉCNICO
+    private Tecnico buscarTecnico(ChamadoDTO dto) {
         if (dto.getTecnico() == null || dto.getTecnico().getId() == null) {
             throw new ResourceNotFoundException("Técnico é obrigatório");
         }
         Long tecnicoId = dto.getTecnico().getId();
-        Tecnico tecnico = tecnicoRepository.findById(tecnicoId)
+        return tecnicoRepository.findById(tecnicoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Técnico não encontrado: " + tecnicoId));
-        entity.setTecnico(tecnico);
     }
 }

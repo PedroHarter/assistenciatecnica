@@ -2,6 +2,7 @@ package com.example.assistenciatecnica.services;
 
 import com.example.assistenciatecnica.dto.TecnicoDTO;
 import com.example.assistenciatecnica.entity.Tecnico;
+import com.example.assistenciatecnica.mappers.TecnicoMapper;
 import com.example.assistenciatecnica.repositories.TecnicoRepository;
 import com.example.assistenciatecnica.repositories.ClienteRepository;
 import com.example.assistenciatecnica.exceptions.DatabaseException;
@@ -24,11 +25,14 @@ public class TecnicoService {
     @Autowired
     private ClienteRepository clienteRepository;
 
+    @Autowired
+    private TecnicoMapper mapper;
+
     @Transactional(readOnly = true)
     public List<TecnicoDTO> findAll() {
         return repository.findAll()
                 .stream()
-                .map(TecnicoDTO::new)
+                .map(mapper::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -36,24 +40,17 @@ public class TecnicoService {
     public TecnicoDTO findById(Long id) {
         Tecnico entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Técnico não encontrado"));
-        return new TecnicoDTO(entity);
+        return mapper.toDto(entity);
     }
 
     @Transactional
     public TecnicoDTO insert(TecnicoDTO dto) {
+        validarCpfEmail(dto);
 
-        if (repository.existsByCpf(dto.getCpf()) || clienteRepository.existsByCpf(dto.getCpf())) {
-            throw new DatabaseException("CPF já cadastrado");
-        }
-
-        if (repository.existsByEmail(dto.getEmail()) || clienteRepository.existsByEmail(dto.getEmail())) {
-            throw new DatabaseException("Email já cadastrado");
-        }
-
-        Tecnico entity = new Tecnico();
-        copyDtoToEntity(dto, entity);
+        Tecnico entity = mapper.toEntity(dto);
         entity = repository.save(entity);
-        return new TecnicoDTO(entity);
+
+        return mapper.toDto(entity);
     }
 
     @Transactional
@@ -61,9 +58,10 @@ public class TecnicoService {
         Tecnico entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Técnico não encontrado"));
 
-        copyDtoToEntity(dto, entity);
+        mapper.updateEntityFromDto(dto, entity);
         entity = repository.save(entity);
-        return new TecnicoDTO(entity);
+
+        return mapper.toDto(entity);
     }
 
     public void delete(Long id) {
@@ -78,15 +76,12 @@ public class TecnicoService {
         }
     }
 
-    private void copyDtoToEntity(TecnicoDTO dto, Tecnico entity) {
-        entity.setNome(dto.getNome());
-        entity.setCpf(dto.getCpf());
-        entity.setEmail(dto.getEmail());
-        entity.setSenha(dto.getSenha());
-
-        if (dto.getPerfis() != null) {
-            entity.getPerfis().clear();
-            entity.getPerfis().addAll(dto.getPerfis());
+    private void validarCpfEmail(TecnicoDTO dto) {
+        if (repository.existsByCpf(dto.getCpf()) || clienteRepository.existsByCpf(dto.getCpf())) {
+            throw new DatabaseException("CPF já cadastrado");
+        }
+        if (repository.existsByEmail(dto.getEmail()) || clienteRepository.existsByEmail(dto.getEmail())) {
+            throw new DatabaseException("Email já cadastrado");
         }
     }
 }
